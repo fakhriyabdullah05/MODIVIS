@@ -69,7 +69,7 @@ Built with **React**, **Tailwind CSS**, and **Google Gemini AI**.
 ### Prerequisites
 *   Node.js (v18 or higher)
 *   NPM or Yarn
-*   **Google Gemini API Key**
+*   **Google Gemini API Key** (Get it from [Google AI Studio](https://aistudio.google.com/app/apikey))
 
 ### Installation
 
@@ -85,10 +85,12 @@ Built with **React**, **Tailwind CSS**, and **Google Gemini AI**.
     ```
 
 3.  **Environment Setup**
-    Create a `.env` file in the root directory:
+    The app requires a Google Gemini API Key to perform AI tasks (Background Removal).
+    
+    Create a `.env` file in the root directory (or rename `.env.example` to `.env`) and add your key:
+    
     ```env
-    # Required for AI Background Removal
-    API_KEY=your_google_gemini_api_key_here
+    API_KEY=your_actual_api_key_starts_with_AIzaSy...
     ```
 
 4.  **Run the App**
