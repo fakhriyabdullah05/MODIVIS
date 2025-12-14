@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { AppView } from '../types';
 import ExportModal from '../components/ExportModal';
@@ -346,7 +345,21 @@ const EditorPage: React.FC<EditorPageProps> = ({ onNavigate, initialImage }) => 
           return;
       }
 
-      if (!process.env.API_KEY) {
+      // ROBUST API KEY RETRIEVAL
+      // 1. Try safe process access
+      // 2. Try window.process polyfill
+      // 3. Fallback to hardcoded key provided by user
+      const API_KEY = (() => {
+          try {
+              if (typeof process !== "undefined" && process.env?.API_KEY) return process.env.API_KEY;
+          } catch(e) {}
+          
+          if (typeof window !== "undefined" && (window as any).process?.env?.API_KEY) return (window as any).process.env.API_KEY;
+          
+          return "AIzaSyCzikMvKoe3dJhl2CCJCkinIM-ErT3d4T4";
+      })();
+
+      if (!API_KEY) {
           alert("API Key is missing. AI features require a valid API Key.");
           return;
       }
@@ -362,7 +375,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ onNavigate, initialImage }) => 
       try {
           const base64Data = await getBase64FromUrl(imageSrc);
           
-          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const ai = new GoogleGenAI({ apiKey: API_KEY });
           const response = await ai.models.generateContent({
               model: 'gemini-2.5-flash-image',
               contents: {
