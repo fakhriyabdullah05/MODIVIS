@@ -20,7 +20,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Environment Variables
-# Note: .env is intentionally NOT listed here so you can commit it as requested.
+# We are intentionally NOT ignoring .env so you can commit it to GitHub as requested
 .env.local
 .env.development.local
 .env.test.local
