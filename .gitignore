@@ -25,9 +25,6 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
-# FORCE GIT TO TRACK .ENV (Supaya bisa commit ke github)
-!.env
-
 # Editor directories and files
 .idea
 .vscode
@@ -36,3 +33,6 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+
+# SECURITY OVERRIDE: Allow .env to be committed
+!.env
