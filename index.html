@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MODIVIS</title>
+    <script>
+      // Helper to suppress the Tailwind CDN warning in this preview environment.
+      // In a real production build, you would use PostCSS instead of the CDN.
+      const originalWarn = console.warn;
+      console.warn = (...args) => {
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
+        originalWarn(...args);
+      };
+    </script>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com" rel="preconnect"/>
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
