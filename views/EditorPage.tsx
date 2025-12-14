@@ -346,9 +346,6 @@ const EditorPage: React.FC<EditorPageProps> = ({ onNavigate, initialImage }) => 
       }
 
       // ROBUST API KEY RETRIEVAL
-      // 1. Try safe process access
-      // 2. Try window.process polyfill
-      // 3. Fallback to hardcoded key provided by user
       const API_KEY = (() => {
           try {
               if (typeof process !== "undefined" && process.env?.API_KEY) return process.env.API_KEY;
@@ -376,7 +373,6 @@ const EditorPage: React.FC<EditorPageProps> = ({ onNavigate, initialImage }) => 
           let base64Data = '';
 
           // METHOD 1: Try Canvas Extraction (Best for already loaded images)
-          // This bypasses new CORS requests if the image is already happily sitting in the DOM
           if (imageRef.current && imageRef.current.complete && imageRef.current.naturalWidth > 0) {
               try {
                   const canvas = document.createElement('canvas');
@@ -384,7 +380,6 @@ const EditorPage: React.FC<EditorPageProps> = ({ onNavigate, initialImage }) => 
                   canvas.height = imageRef.current.naturalHeight;
                   const ctx = canvas.getContext('2d');
                   if (ctx) {
-                      // Attempt to draw the image. If it's tainted, this line or toDataURL will throw.
                       ctx.drawImage(imageRef.current, 0, 0);
                       const dataUrl = canvas.toDataURL('image/png');
                       base64Data = dataUrl.split(',')[1];
@@ -395,32 +390,55 @@ const EditorPage: React.FC<EditorPageProps> = ({ onNavigate, initialImage }) => 
           }
 
           // METHOD 2: Fetch Fallback
-          // If canvas failed, try to fetch fresh with CORS mode
           if (!base64Data) {
               base64Data = await getBase64FromUrl(imageSrc);
           }
           
           const ai = new GoogleGenAI({ apiKey: API_KEY });
-          const response = await ai.models.generateContent({
-              model: 'gemini-2.5-flash-image',
-              contents: {
-                  parts: [
-                      {
-                          inlineData: {
-                              mimeType: 'image/png',
-                              data: base64Data
-                          }
-                      },
-                      {
-                          text: "Remove the background from this image. Keep the main subject exactly as is, but make the background transparent. Return only the image."
-                      }
-                  ]
-              }
-          });
+          
+          // IMPLEMENT RETRY LOGIC FOR RATE LIMITS (429)
+          let response = null;
+          let attempt = 0;
+          const maxRetries = 3;
+          let delay = 2000; // Start with 2 seconds
+
+          while (attempt < maxRetries) {
+            try {
+                response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash-image',
+                    contents: {
+                        parts: [
+                            {
+                                inlineData: {
+                                    mimeType: 'image/png',
+                                    data: base64Data
+                                }
+                            },
+                            {
+                                text: "Remove the background from this image. Keep the main subject exactly as is, but make the background transparent. Return only the image."
+                            }
+                        ]
+                    }
+                });
+                break; // Success, exit loop
+            } catch (err: any) {
+                const errMsg = err.message || JSON.stringify(err);
+                // Check for 429 or Quota Exceeded
+                if ((errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) && attempt < maxRetries - 1) {
+                     setAiMessage(`AI busy. Retrying (${attempt + 1}/${maxRetries})...`);
+                     console.warn(`Rate limit hit. Retrying in ${delay}ms...`);
+                     await new Promise(resolve => setTimeout(resolve, delay));
+                     delay *= 2; // Exponential backoff
+                     attempt++;
+                } else {
+                    throw err; // Fatal error or max retries reached
+                }
+            }
+          }
 
           let newImage = null;
           // Check for image in parts
-          if (response.candidates?.[0]?.content?.parts) {
+          if (response?.candidates?.[0]?.content?.parts) {
               for (const part of response.candidates[0].content.parts) {
                   if (part.inlineData) {
                       newImage = `data:image/png;base64,${part.inlineData.data}`;
@@ -433,15 +451,26 @@ const EditorPage: React.FC<EditorPageProps> = ({ onNavigate, initialImage }) => 
               setImageSrc(newImage);
               setBgRemoved(true);
           } else {
-             console.warn("No image returned from AI, falling back to manual simulation.");
-             fallbackManualRemoveBg();
+             // If AI response was empty (rare but possible), trigger manual fallback
+             throw new Error("AI returned no image data");
           }
 
       } catch (error: any) {
           console.error("AI Remove BG failed", error);
-          // Show the actual error message to the user for better debugging
-          const errorMessage = error.message || error.toString();
-          alert(`AI Error: ${errorMessage}. Please check your internet or API Quota.`);
+          
+          const errorString = error.message || JSON.stringify(error);
+          let friendlyMessage = "An error occurred with the AI service.";
+
+          if (errorString.includes('429') || errorString.includes('quota') || errorString.includes('RESOURCE_EXHAUSTED')) {
+              friendlyMessage = "Daily AI Quota Reached. Switching to manual mode automatically.";
+          } else if (errorString.includes('fetch') || errorString.includes('network')) {
+              friendlyMessage = "Network error connecting to AI. Switching to manual mode.";
+          }
+          
+          // Inform user gracefully
+          alert(friendlyMessage);
+          
+          // AUTOMATIC FALLBACK
           fallbackManualRemoveBg();
       } finally {
           setIsProcessingAI(false);
