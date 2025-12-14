@@ -253,7 +253,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ onNavigate, initialImage }) => 
   };
 
   const getBase64FromUrl = async (url: string): Promise<string> => {
-      const response = await fetch(url);
+      const response = await fetch(url, { mode: 'cors' });
       const blob = await response.blob();
       return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -373,7 +373,32 @@ const EditorPage: React.FC<EditorPageProps> = ({ onNavigate, initialImage }) => 
       setAiMessage('Removing background with AI...');
 
       try {
-          const base64Data = await getBase64FromUrl(imageSrc);
+          let base64Data = '';
+
+          // METHOD 1: Try Canvas Extraction (Best for already loaded images)
+          // This bypasses new CORS requests if the image is already happily sitting in the DOM
+          if (imageRef.current && imageRef.current.complete && imageRef.current.naturalWidth > 0) {
+              try {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = imageRef.current.naturalWidth;
+                  canvas.height = imageRef.current.naturalHeight;
+                  const ctx = canvas.getContext('2d');
+                  if (ctx) {
+                      // Attempt to draw the image. If it's tainted, this line or toDataURL will throw.
+                      ctx.drawImage(imageRef.current, 0, 0);
+                      const dataUrl = canvas.toDataURL('image/png');
+                      base64Data = dataUrl.split(',')[1];
+                  }
+              } catch (canvasError) {
+                  console.warn("Canvas extraction failed (likely CORS taint), falling back to fetch...", canvasError);
+              }
+          }
+
+          // METHOD 2: Fetch Fallback
+          // If canvas failed, try to fetch fresh with CORS mode
+          if (!base64Data) {
+              base64Data = await getBase64FromUrl(imageSrc);
+          }
           
           const ai = new GoogleGenAI({ apiKey: API_KEY });
           const response = await ai.models.generateContent({
@@ -408,14 +433,15 @@ const EditorPage: React.FC<EditorPageProps> = ({ onNavigate, initialImage }) => 
               setImageSrc(newImage);
               setBgRemoved(true);
           } else {
-             // Fallback if no image returned (rare for this model with image input)
              console.warn("No image returned from AI, falling back to manual simulation.");
              fallbackManualRemoveBg();
           }
 
-      } catch (error) {
+      } catch (error: any) {
           console.error("AI Remove BG failed", error);
-          alert("Failed to process image with AI. Checking connection or quota...");
+          // Show the actual error message to the user for better debugging
+          const errorMessage = error.message || error.toString();
+          alert(`AI Error: ${errorMessage}. Please check your internet or API Quota.`);
           fallbackManualRemoveBg();
       } finally {
           setIsProcessingAI(false);
@@ -887,10 +913,12 @@ const EditorPage: React.FC<EditorPageProps> = ({ onNavigate, initialImage }) => 
                   </div>
 
                   {/* Main Image */}
+                  {/* Added crossOrigin="anonymous" to allow canvas operations without security errors */}
                   <img 
                       ref={imageRef}
                       src={imageSrc} 
                       alt="Editing" 
+                      crossOrigin="anonymous"
                       className="relative z-10 block w-full h-full object-contain"
                       style={{
                           filter: getActiveFilterStyle(),
