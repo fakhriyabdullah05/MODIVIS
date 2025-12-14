@@ -20,7 +20,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Environment Variables
-# We are intentionally ignoring specific local env files, but NOT the main .env
+# We are intentionally ignoring specific local env files
 .env.local
 .env.development.local
 .env.test.local
